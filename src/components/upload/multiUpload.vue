@@ -1,8 +1,10 @@
 <template>
   <div>
     <el-upload
-      action="http://gulimall-hello-3.oss-cn-beijing.aliyuncs.com"
+      ref="upload"
+      :action="actionUrl"
       :data="dataObj"
+      :http-request="doUpload"
       :list-type="listType"
       :file-list="fileList"
       :before-upload="beforeUpload"
@@ -21,7 +23,7 @@
   </div>
 </template>
 <script>
-import { policy } from "./policy";
+import { policy,minIoImgUpdate } from "./policy";
 import { getUUID } from '@/utils'
 export default {
   name: "multiUpload",
@@ -45,6 +47,9 @@ export default {
   },
   data() {
     return {
+      headerObj: {
+        'Request Method': 'put',
+      },
       dataObj: {
         policy: "",
         signature: "",
@@ -55,10 +60,15 @@ export default {
         uuid: ""
       },
       dialogVisible: false,
-      dialogImageUrl: null
+      // actionUrl: '',
+      dialogImageUrl: null,
+      resourcesUrl: 'http://devhost2:9000/gulimall-learning'
     };
   },
   computed: {
+    actionUrl() {
+      return this.resourcesUrl;
+    },
     fileList() {
       let fileList = [];
       for (let i = 0; i < this.value.length; i++) {
@@ -66,10 +76,43 @@ export default {
       }
 
       return fileList;
+    },
+    getImgSrc () {
+      if (!this.value) {
+        return ''
+      }
+      if (this.value.indexOf('http://') === 0 || this.value.indexOf('https://') === 0) {
+        return this.value
+      }
+      return this.resourcesUrl + this.value
     }
   },
   mounted() {},
   methods: {
+    doUpload(data) {
+      console.log(data)
+      let file = data.file;
+      minIoImgUpdate(data.action,file).then(data => {
+        console.log(data)
+        let url = data.config.url;
+        let index = url.indexOf('?');
+        let s = url.substring(0, index);
+        console.log(s)
+        this.fileList.push({
+          name: file.name,
+          // url: this.dataObj.host + "/" + this.dataObj.dir + "/" + file.name； 替换${filename}为真正的文件名
+          url: s
+        });
+        this.emitInput(this.fileList);
+
+      })
+      return true
+    },
+    handleBeforeUpload(file) {
+      this.$refs.upload.xhr.open('PUT', this.actionUrl, true);
+      this.$refs.upload.xhr.send(file);
+      return false;
+    },
     emitInput(fileList) {
       let value = [];
       for (let i = 0; i < fileList.length; i++) {
@@ -87,15 +130,17 @@ export default {
     beforeUpload(file) {
       let _self = this;
       return new Promise((resolve, reject) => {
-        policy()
+        policy({fileNum: 1})
           .then(response => {
             console.log("这是什么${filename}");
-            _self.dataObj.policy = response.data.policy;
-            _self.dataObj.signature = response.data.signature;
-            _self.dataObj.ossaccessKeyId = response.data.accessid;
-            _self.dataObj.key = response.data.dir +getUUID()+"_${filename}";
-            _self.dataObj.dir = response.data.dir;
-            _self.dataObj.host = response.data.host;
+            let data = response.data;
+            _self.dataObj.policy = data.policy;
+            _self.dataObj.signature = data.signature;
+            _self.dataObj.ossaccessKeyId = data.accessid;
+            _self.dataObj.key = data.dir +getUUID();
+            _self.dataObj.dir = data.dir;
+            _self.dataObj.host = data.host;
+            _self.resourcesUrl = data.ossList[0].actionUrl;
             resolve(true);
           })
           .catch(err => {
@@ -103,14 +148,17 @@ export default {
             reject(false);
           });
       });
+
     },
     handleUploadSuccess(res, file) {
-      this.fileList.push({
-        name: file.name,
-        // url: this.dataObj.host + "/" + this.dataObj.dir + "/" + file.name； 替换${filename}为真正的文件名
-        url: this.dataObj.host + "/" + this.dataObj.key.replace("${filename}",file.name)
-      });
-      this.emitInput(this.fileList);
+      // console.log(res)
+      // this.fileList.push({
+      //   name: file.name,
+      //   // url: this.dataObj.host + "/" + this.dataObj.dir + "/" + file.name； 替换${filename}为真正的文件名
+      //   url: this.dataObj.host + "/" + this.dataObj.key.replace("${filename}",file.name)
+      // });
+      // console.log(this.fileList)
+      // this.emitInput(this.fileList);
     },
     handleExceed(files, fileList) {
       this.$message({

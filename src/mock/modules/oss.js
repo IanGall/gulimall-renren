@@ -1,4 +1,5 @@
 import Mock from 'mockjs'
+import http from '@/utils/httpRequest.js'
 
 // 生成数据列表
 var dataList = []
